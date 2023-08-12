@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 11-Aug-2023 at 22:08:23 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>6 tests ran in 136.49 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_search_logged_in_04</td>
+          <td class="col-duration">30.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;test_chess.ChessComTests testMethod=test_search_logged_in_04&gt;<br/><br/>    def test_search_logged_in_04(self):<br/>        driver = self.driver<br/>        driver.get(&quot;https://www.chess.com&quot;)<br/>    <br/>        login_link = self.wait.until(<br/>            EC.element_to_be_clickable(<br/>                (<br/>                    By.XPATH,<br/>                    &quot;//a[contains(@class, &#x27;button&#x27;) and contains(@class, &#x27;auth&#x27;) and contains(@class, &#x27;login&#x27;)]&quot;,<br/>                )<br/>            )<br/>        )<br/>        login_link.click()<br/>    <br/>        email_input = driver.find_element(By.NAME, &quot;_username&quot;)<br/>        password_input = driver.find_element(By.NAME, &quot;_password&quot;)<br/>        email_input.send_keys(&quot;finisimobilly@gmail.com&quot;)<br/>        password_input.send_keys(&quot;B!Z-B6bgDfQHz8V&quot;)<br/>    <br/>        login_button = self.wait.until(<br/>            EC.element_to_be_clickable((By.XPATH, &quot;//button[@id=&#x27;login&#x27;]&quot;))<br/>        )<br/>        login_button.click()<br/>    <br/>        # Esperar hasta que el icono de búsqueda sea cliclable<br/>        search_icon = self.wait.until(<br/>            EC.element_to_be_clickable(<br/>                (By.XPATH, &quot;//span[contains(@class, &#x27;search-tooltip-component&#x27;)]&quot;)<br/>            )<br/>        )<br/>        search_icon.click()<br/>    <br/>        # Esperar hasta que el campo de búsqueda sea visible y clicable<br/>        search_input = self.wait.until(<br/>            EC.element_to_be_clickable(<br/>                (<br/>                    By.XPATH,<br/>                    &quot;//input[@placeholder=&#x27;Buscar&#x27; and @class=&#x27;ui_v5-input-component&#x27;]&quot;,<br/>                )<br/>            )<br/>        )<br/>    <br/>        # Ingresar la palabra clave de búsqueda<br/>        search_input.send_keys(&quot;yuca&quot;)<br/>    <br/>        # Presionar Enter para realizar la búsqueda<br/>        search_input.send_keys(Keys.ENTER)<br/>    <br/>        captura_de_pantalla = r&quot;C:\Users\brayn\Desktop\Prueba-automatizada-bj\capturas&quot;<br/>        test4_img1 = &quot;Prueba_04_test_search_logged_in_chess.png&quot;<br/>        almacenar = captura_de_pantalla + &quot;/&quot; + test4_img1<br/>        driver.save_screenshot(almacenar)<br/>        time.sleep(5)<br/>    <br/>        # Aumentar el tiempo de espera para los resultados de la búsqueda<br/>&gt;       WebDriverWait(driver, 10).until(<br/>            EC.presence_of_element_located((By.CLASS_NAME, &quot;search-result-component&quot;))<br/>        )<br/><br/>test_chess.py:221: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;0f9060bc1802c97298f3b4b08146a65c&quot;)&gt;<br/>method = &lt;function presence_of_element_located.&lt;locals&gt;._predicate at 0x000002003DAF2840&gt;, message = &#x27;&#x27;<br/><br/>    def until(self, method, message: str = &quot;&quot;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value does not evaluate to ``False``.<br/>    <br/>        :param method: callable(WebDriver)<br/>        :param message: optional message for :exc:`TimeoutException`<br/>        :returns: the result of the last call to `method`<br/>        :raises: :exc:`selenium.common.exceptions.TimeoutException` if timeout occurs<br/>        &quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.monotonic() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &quot;screen&quot;, None)<br/>                stacktrace = getattr(exc, &quot;stacktrace&quot;, None)<br/>            time.sleep(self._poll)<br/>            if time.monotonic() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message: </span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       Backtrace:</span><br/><span class="error">E       	GetHandleVerifier [0x00007FF620195422+69586]</span><br/><span class="error">E       	Microsoft::Applications::Events::EventProperty::~EventProperty [0x00007FF620125662+760226]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FEDB8CC]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF22C79]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF22D8A]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF5F007]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF42DEF]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF16A11]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF5C241]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF42B83]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF1589E]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF14B6B]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF16024]</span><br/><span class="error">E       	Microsoft::Applications::Events::ILogManager::DispatchEventBroadcast [0x00007FF62036D229+1294553]</span><br/><span class="error">E       	(No symbol) [0x00007FF61FF949F4]</span><br/><span class="error">E       	Microsoft::Applications::Events::EventProperty::~EventProperty [0x00007FF620073DF1+33073]</span><br/><span class="error">E       	Microsoft::Applications::Events::EventProperty::~EventProperty [0x00007FF62006C409+1865]</span><br/><span class="error">E       	Microsoft::Applications::Events::ILogManager::DispatchEventBroadcast [0x00007FF62036BE01+1289393]</span><br/><span class="error">E       	Microsoft::Applications::Events::ILogConfiguration::operator* [0x00007FF62012DC68+20184]</span><br/><span class="error">E       	Microsoft::Applications::Events::ILogConfiguration::operator* [0x00007FF62012A2F4+5476]</span><br/><span class="error">E       	Microsoft::Applications::Events::ILogConfiguration::operator* [0x00007FF62012A3EC+5724]</span><br/><span class="error">E       	Microsoft::Applications::Events::EventProperty::~EventProperty [0x00007FF62011ECA1+733153]</span><br/><span class="error">E       	BaseThreadInitThunk [0x00007FFDF5CB26AD+29]</span><br/><span class="error">E       	RtlUserThreadStart [0x00007FFDF6FAAA68+40]</span><br/><br/>..\..\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\selenium\webdriver\support\wait.py:95: TimeoutException<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_edit_profile_06</td>
+          <td class="col-duration">19.93</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_inicio_de_sesion_invalido_chess_02</td>
+          <td class="col-duration">15.97</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_inicio_de_sesion_valido_chess_01</td>
+          <td class="col-duration">16.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_play_chess_03</td>
+          <td class="col-duration">24.25</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_chess.py::ChessComTests::test_play_with_friend_by_username_05</td>
+          <td class="col-duration">29.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
